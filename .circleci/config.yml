@@ -42,6 +42,7 @@ jobs:
       - save_cache:
           paths: [frontend/node_modules]
           key: frontend-build
+      - slack/notify: 
 
   build-backend:
     docker:
@@ -133,5 +134,5 @@ workflows:
           requires: [build-frontend]
       - scan-backend:
           requires: [build-backend]
-      - notifySlack:
-          requires: [build-frontend]
+      -  notifySlack:
+          context: slack-secrets
