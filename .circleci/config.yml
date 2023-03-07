@@ -2,30 +2,6 @@ version: 2.1
 orbs:
   slack: circleci/slack@4.9.3           
 jobs:
-  notifySlack:
-    docker:
-      - image: 'cimg/base:stable'
-        auth:
-          username: mydockerhub-user
-          password: $DOCKERHUB_PASSWORD 
-    steps:
-      - slack/notify:
-          custom: |
-            {
-              "blocks": [
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "plain_text",
-                      "text": "*This is a text notification*",
-                      "emoji": true
-                    }
-                  ]
-                }
-              ]
-            }
-          event: always
   build-frontend:
     docker:
       - image: circleci/node:13.8.0
@@ -42,6 +18,10 @@ jobs:
       - save_cache:
           paths: [frontend/node_modules]
           key: frontend-build
+      - slack/notify: 
+          branch_pattern: master
+          event: always
+          template: success_tagged_deploy_1
 
   build-backend:
     docker:
