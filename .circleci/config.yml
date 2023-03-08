@@ -1,31 +1,61 @@
 version: 2.1
-orbs:
-  slack: circleci/slack@4.9.3           
-jobs:
-  notifySlack:
-    docker:
-      - image: 'cimg/base:stable'
-        auth:
-          username: mydockerhub-user
-          password: $DOCKERHUB_PASSWORD 
+orbs: 
+  slack: circleci/slack@4.10.1
+  aws-cli: circleci/aws-cli@3.1.1
+
+commands:
+  destroy-environment:
+    description: Destroy back-end and front-end cloudformation stacks given a workflow ID.
+    parameters:
+      Workflow_ID:
+        type: string
+        default: ${CIRCLE_WORKFLOW_ID:0:7}
     steps:
-      - slack/notify:
-          custom: |
-            {
-              "blocks": [
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "plain_text",
-                      "text": "*Build success in*",
-                      "emoji": true
-                    }
-                  ]
-                }
-              ]
-            }
-          event: pass
+      - run:
+          name: Destroy environments
+          when: on_fail
+          command: |
+            echo "Destroying environment: << parameters.Workflow_ID >> "
+            aws --region us-west-2 s3 rm s3://udapeople-<<parameters.Workflow_ID>> --recursive
+            aws --region us-west-2 cloudformation delete-stack --stack-name udapeople-backend-<< parameters.Workflow_ID >>
+            aws --region us-west-2 cloudformation delete-stack --stack-name udapeople-frontend-<< parameters.Workflow_ID >>
+
+  install_awscli:
+    description: Install AWS CLI # https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+    steps:
+      - run:
+          name: Install tar and zip utilities
+          command: |
+            yum -y install tar gzip unzip zip python-dev
+      - run:
+          name: Install AWS CLI 
+          command: |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            ./aws/install -i /usr/local/aws-cli -b /usr/local/bin
+
+  revert-migrations:
+    description: Revert the last migration if successfully run in the current workflow.
+    parameters:
+      Workflow_ID:
+        type: string
+        default: ${CIRCLE_WORKFLOW_ID:0:7}    
+    steps:
+      - run:
+          name: Revert migrations
+          when: on_fail
+          command: |
+              SUCCESS=$(curl --insecure  https://kvdb.io/${KVDB_BUCKET_ID}/migration_<< parameters.Workflow_ID >>)
+              # Logic for reverting the database state
+              if (( $SUCCESS == 1 ));
+              then
+                cd ~/project/backend
+                npm install
+                npm run migration:revert
+              fi
+
+            
+jobs:
   build-frontend:
     docker:
       - image: circleci/node:13.8.0
@@ -61,65 +91,87 @@ jobs:
           key: backend-build
 
   test-frontend:
-    docker: 
+    docker:
+      # Docker image here
       - image: circleci/node:13.8.0
     steps:
+      # Checkout code from git
       - checkout
+      # Restore from cache
       - restore_cache:
           keys: [frontend-build]
+      # Your job code here
       - run:
-          name: Run front-end test
+          name: Test front-end
           command: |
             cd frontend
-            npm install
+            npm i
             npm run test
-      - save_cache:
-          paths: [frontend/node_modules]
-          key: frontend-build
                 
   test-backend:
     docker:
+      # Docker image here
       - image: circleci/node:13.8.0
     steps:
+      # Checkout code from git
       - checkout
+      # Restore from cache
       - restore_cache:
-          keys: [frontend-build]
+          keys: [backend-build]
+      # Your job code here
       - run:
-          name: Run back-end test
+          name: Test back-end
           command: |
             cd backend
-            npm install
+            npm i
             npm run test
-      - save_cache:
-          paths: [backend/node_modules]
-          key: backend-build
+            
   scan-frontend:
     docker:
+      # Docker image here
       - image: circleci/node:13.8.0
-    steps: 
+    steps:
+      # Checkout code from git
       - checkout
+      # Restore from cache
       - restore_cache:
           keys: [frontend-build]
+      # Your job code here
       - run:
           name: Scan front-end
           command: |
             cd frontend
             npm install
             npm audit fix --audit-level=critical --force
+      - slack/notify:
+          context: slack-secrets
+          channel: $SLACK_DEFAULT_CHANNEL
+          event: fail
+          template: basic_fail_1
+          
   scan-backend:
     docker:
+      # Docker image here
       - image: circleci/node:13.8.0
-    steps: 
+    steps:
+      # Checkout code from git
       - checkout
+      # Restore from cache
       - restore_cache:
           keys: [backend-build]
+      # Your job code here
       - run:
-          name: Scan front-end
+          name: Scan back-end
           command: |
             cd backend
             npm install
             npm audit fix --audit-level=critical --force
-          
+      - slack/notify:
+          context: slack-secrets
+          channel: $SLACK_DEFAULT_CHANNEL
+          event: fail
+          template: basic_fail_1
+
 workflows:
   default:
     jobs:
@@ -129,10 +181,7 @@ workflows:
           requires: [build-frontend]
       - test-backend:
           requires: [build-backend]
-      - scan-frontend:
-          requires: [build-frontend]
       - scan-backend:
           requires: [build-backend]
-      -  notifySlack:
-          context: slack-secrets
-          requires: [build-backend]
+      - scan-frontend:
+          requires: [build-frontend]
