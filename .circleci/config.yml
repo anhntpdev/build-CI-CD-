@@ -144,7 +144,6 @@ jobs:
             npm install
             npm audit fix --audit-level=critical --force
       - slack/notify:
-          context: slack-secrets
           channel: $SLACK_DEFAULT_CHANNEL
           event: fail
           template: basic_fail_1
@@ -167,7 +166,6 @@ jobs:
             npm install
             npm audit fix --audit-level=critical --force
       - slack/notify:
-          context: slack-secrets
           channel: $SLACK_DEFAULT_CHANNEL
           event: fail
           template: basic_fail_1
