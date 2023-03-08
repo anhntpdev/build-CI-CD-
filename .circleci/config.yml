@@ -42,6 +42,23 @@ jobs:
       - save_cache:
           paths: [frontend/node_modules]
           key: frontend-build
+      - slack/notify:
+          custom: |
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "plain_text",
+                      "text": "*Build front-end success*",
+                      "emoji": true
+                    }
+                  ]
+                }
+              ]
+            }
+          event: pass
 
   build-backend:
     docker:
