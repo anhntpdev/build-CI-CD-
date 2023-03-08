@@ -76,8 +76,6 @@ jobs:
           channel: $SLACK_DEFAULT_CHANNEL
           event: pass
           template: basic_success_1
-          context: slack-secrets
-
   build-backend:
     docker:
       - image: circleci/node:13.8.0
